@@ -4,13 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trajectory-analyzer"
-version = "0.1.0"
-description = "Coding-agent trajectory analytics primitives"
-readme = "docs/trajectory_analytics_system_design.md"
+version = "0.2.0"
+description = "Ray-backbone trajectory analytics toolkit"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "pandas>=2.0",
+  "pyarrow>=15.0",
 ]
+
+[project.optional-dependencies]
+ray = ["ray[data]>=2.20"]
+accelerators = ["duckdb>=1.0", "polars>=1.0"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

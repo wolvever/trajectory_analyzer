@@ -1,66 +1,101 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Dict, Iterable, List, Optional, Protocol
 
 
 @dataclass(frozen=True)
 class TableSpec:
-    """Logical-to-physical mapping for a dataset table."""
-
     name: str
-    path_glob: str
+    path: str
+    format: str
     schema_version: str
-    partition_keys: List[str]
+    partition_keys: tuple[str, ...]
+    description: str = ""
 
 
-class Catalog:
-    """In-memory catalog for dataset table specs."""
-
-    def __init__(self, tables: Iterable[TableSpec]):
-        self._tables = {t.name: t for t in tables}
-
-    def get_table(self, name: str) -> TableSpec:
-        try:
-            return self._tables[name]
-        except KeyError as exc:
-            raise KeyError(f"Unknown table '{name}'. Known tables: {sorted(self._tables)}") from exc
-
-    @classmethod
-    def from_lake_root(cls, lake_root: str | Path, schema_version: str = "v1") -> "Catalog":
-        root = Path(lake_root)
-        specs = [
-            TableSpec("raw_events", str(root / "raw/events/**/*.parquet"), schema_version, ["dt", "app_id", "session_id"]),
-            TableSpec("sessions", str(root / "derived/sessions/**/*.parquet"), schema_version, ["dt", "app_id"]),
-            TableSpec("turns", str(root / "derived/turns/**/*.parquet"), schema_version, ["dt", "app_id"]),
-            TableSpec("model_spans", str(root / "derived/model_spans/**/*.parquet"), schema_version, ["dt", "app_id", "model"]),
-            TableSpec("tool_calls", str(root / "derived/tool_calls/**/*.parquet"), schema_version, ["dt", "app_id", "tool_name"]),
-            TableSpec("errors", str(root / "derived/errors/**/*.parquet"), schema_version, ["dt", "app_id", "error_type"]),
-            TableSpec("session_treatments", str(root / "derived/session_treatments/**/*.parquet"), schema_version, ["dt", "app_id"]),
-            TableSpec("eval_runs", str(root / "derived/eval_runs/**/*.parquet"), schema_version, ["dt", "benchmark", "model"]),
-        ]
-        return cls(specs)
+class Catalog(Protocol):
+    def get(self, table: str) -> TableSpec: ...
+    def register(self, table: str, spec: TableSpec) -> None: ...
+    def list(self) -> list[str]: ...
 
 
-class DatasetRegistry:
-    """Helper to produce engine-specific scans with optional partition filters."""
+class InMemoryCatalog:
+    def __init__(self, specs: Optional[Iterable[TableSpec]] = None):
+        self._tables: Dict[str, TableSpec] = {}
+        for spec in specs or []:
+            self.register(spec.name, spec)
 
-    def __init__(self, catalog: Catalog):
-        self.catalog = catalog
+    def get(self, table: str) -> TableSpec:
+        if table not in self._tables:
+            raise KeyError(f"Unknown table '{table}'. Registered: {sorted(self._tables)}")
+        return self._tables[table]
 
-    def duckdb_scan_sql(self, table_name: str) -> str:
-        spec = self.catalog.get_table(table_name)
-        escaped = spec.path_glob.replace("'", "''")
-        return f"SELECT * FROM parquet_scan('{escaped}', hive_partitioning=true)"
+    def register(self, table: str, spec: TableSpec) -> None:
+        self._tables[table] = spec
 
-    def ray_read_kwargs(self, table_name: str, filters: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-        spec = self.catalog.get_table(table_name)
-        kwargs: Dict[str, Any] = {"paths": spec.path_glob}
-        if filters:
-            kwargs["partition_filter"] = self._as_partition_filter(spec, filters)
-        return kwargs
+    def list(self) -> list[str]:
+        return sorted(self._tables)
 
-    @staticmethod
-    def _as_partition_filter(spec: TableSpec, filters: Mapping[str, Any]) -> Dict[str, Any]:
-        return {k: v for k, v in filters.items() if k in set(spec.partition_keys)}
+
+@dataclass(frozen=True)
+class ReadFilters:
+    dt: Optional[str] = None
+    dt_from: Optional[str] = None
+    dt_to: Optional[str] = None
+    app_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+def _iso_dates(start: date, end: date) -> List[str]:
+    vals: List[str] = []
+    cur = start
+    while cur <= end:
+        vals.append(cur.isoformat())
+        cur += timedelta(days=1)
+    return vals
+
+
+def _parse_day(s: str) -> date:
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+
+def resolve_partition_paths(spec: TableSpec, filters: Optional[ReadFilters]) -> List[str]:
+    root = Path(spec.path)
+    if not filters:
+        return [str(root / "**/*.parquet")]
+
+    days: List[str]
+    if filters.dt:
+        days = [filters.dt]
+    elif filters.dt_from and filters.dt_to:
+        days = _iso_dates(_parse_day(filters.dt_from), _parse_day(filters.dt_to))
+    elif filters.dt_from:
+        days = [filters.dt_from]
+    elif filters.dt_to:
+        days = [filters.dt_to]
+    else:
+        days = ["*"]
+
+    app = filters.app_id or "*"
+    session = filters.session_id if "session_id" in spec.partition_keys else "*"
+
+    out: List[str] = []
+    for d in days:
+        out.append(str(root / f"dt={d}" / f"app_id={app}" / f"session_id={session}" / "*.parquet"))
+    return out
+
+
+def build_default_catalog(lake_root: str | Path, schema_version: str = "v2") -> InMemoryCatalog:
+    root = Path(lake_root)
+    specs = [
+        TableSpec("raw_events", str(root / "raw/events"), "parquet", schema_version, ("dt", "app_id", "session_id"), "Authoritative event stream."),
+        TableSpec("sessions", str(root / "derived/sessions"), "parquet", schema_version, ("dt", "app_id"), "Per-session stats."),
+        TableSpec("turns", str(root / "derived/turns"), "parquet", schema_version, ("dt", "app_id"), "Per-turn stats."),
+        TableSpec("turn_features", str(root / "derived/turn_features"), "parquet", schema_version, ("dt", "app_id"), "Wide turn feature table."),
+        TableSpec("errors", str(root / "derived/errors"), "parquet", schema_version, ("dt", "app_id", "error_type"), "Normalized errors."),
+        TableSpec("eval_runs", str(root / "derived/eval_runs"), "parquet", schema_version, ("dt", "benchmark", "model"), "Benchmark outcomes."),
+    ]
+    return InMemoryCatalog(specs)

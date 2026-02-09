@@ -1,16 +1,23 @@
-# trajectory-analyzer
+# trajectory-analyzer (Ray backbone)
 
-MVP implementation of the coding-agent trajectory analytics system described in `docs/trajectory_analytics_system_design.md`.
+This repository implements a **Ray Data backbone** trajectory analytics system with Parquet/Arrow storage and extensible operator-based compute.
 
-## Implemented modules
+## Core architecture
 
-- `trajectory_analyzer.catalog`: table specs, catalog, dataset registry
-- `trajectory_analyzer.engines`: DuckDB and Ray engine wrappers
-- `trajectory_analyzer.derivation`: event-to-derived builders (`model_spans`, `tool_calls`, `turns`, `sessions`)
-- `trajectory_analyzer.analysis`: plugin abstractions, planner runner, and `CondenseImpact` example plugin
+- `catalog.py`: `TableSpec`, catalog registry, and partition-path pruning helpers
+- `context.py`: `Context.read / apply / write` over Ray Data
+- `operators.py`: minimal operator contract + generic `Batch` wrapper (Arrow/Polars/DuckDB views)
+- `derivation_ops.py`: sample derivation operators (`BuildTurnsAndErrors`, `BuildSessions`)
+- `adapters.py`: OpenHands JSONL to canonical raw-events Arrow table
 
-## Run tests
+## Quickstart
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
+```
+
+For a demo pipeline over fixture trajectories:
+
+```bash
+PYTHONPATH=src python scripts/run_ray_backbone_demo.py
 ```
