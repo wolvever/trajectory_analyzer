@@ -22,6 +22,13 @@ class Catalog(Protocol):
     def list(self) -> list[str]: ...
 
 
+class DatasetRegistry(Protocol):
+    """Structural type expected by engines and analysis plugins."""
+
+    def duckdb_scan_sql(self, table_name: str) -> str: ...
+    def ray_read_kwargs(self, table_name: str, filters: Optional[Dict] = None) -> Dict: ...
+
+
 class InMemoryCatalog:
     def __init__(self, specs: Optional[Iterable[TableSpec]] = None):
         self._tables: Dict[str, TableSpec] = {}

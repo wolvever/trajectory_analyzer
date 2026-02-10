@@ -1,6 +1,6 @@
 """Ray-backbone trajectory analytics toolkit."""
 
-from .adapters import OpenHandsRawAdapter, load_openhands_as_arrow
+from .adapters import OpenHandsAdapter, load_conversations, load_events_as_arrow, load_generation_status
 from .catalog import InMemoryCatalog, ReadFilters, TableSpec, build_default_catalog, resolve_partition_paths
 from .context import Context
 from .derivation_ops import BuildSessions, BuildTurnsAndErrors
@@ -18,8 +18,10 @@ __all__ = [
     "DuckBatch",
     "Batch",
     "Operator",
-    "OpenHandsRawAdapter",
-    "load_openhands_as_arrow",
+    "OpenHandsAdapter",
+    "load_events_as_arrow",
+    "load_generation_status",
+    "load_conversations",
     "BuildTurnsAndErrors",
     "BuildSessions",
 ]

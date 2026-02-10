@@ -1,3 +1,56 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# Ray
 .ray_staging/
+
+# DuckDB
+*.duckdb
+*.duckdb.wal
+
+# Data lake output
+lake/
+
+# Analysis output
+analysis_results/
+
+# Secrets / environment
+.env
+.env.*
+
+# Downloader (contains internal API endpoints)
+scripts/downloader.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/

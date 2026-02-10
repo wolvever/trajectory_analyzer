@@ -14,15 +14,15 @@ class Engine(Protocol):
 
 @dataclass
 class DuckDBEngine:
-    con: Any
+    conn: Any
     kind: EngineType = "duckdb"
 
     def register_table(self, table_name: str, registry: DatasetRegistry) -> None:
         scan_sql = registry.duckdb_scan_sql(table_name)
-        self.con.execute(f"CREATE OR REPLACE VIEW {table_name} AS {scan_sql}")
+        self.conn.execute(f"CREATE OR REPLACE VIEW {table_name} AS {scan_sql}")
 
     def sql(self, query: str, params: Optional[List[Any]] = None):
-        return self.con.execute(query, params or []).df()
+        return self.conn.execute(query, params or []).df()
 
 
 @dataclass

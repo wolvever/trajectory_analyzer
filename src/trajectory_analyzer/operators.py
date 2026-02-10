@@ -8,7 +8,7 @@ import pyarrow as pa
 
 @dataclass(frozen=True)
 class DuckBatch:
-    con: object
+    conn: object
     arrow: pa.Table
 
 
@@ -26,9 +26,9 @@ class Batch:
         return pl.from_arrow(self._arrow)
 
     def duckdb(self) -> DuckBatch:
-        con = self._runtime.duckdb_con()
-        con.register("batch", self._arrow)
-        return DuckBatch(con=con, arrow=self._arrow)
+        conn = self._runtime.duckdb_conn()
+        conn.register("batch", self._arrow)
+        return DuckBatch(conn=conn, arrow=self._arrow)
 
 
 class Operator:
